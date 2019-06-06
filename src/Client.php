@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SeamsCMS\Delivery;
 
+use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\BadResponseException as GuzzleBadResponseException;
 use GuzzleHttp\Exception\GuzzleException;
 use SeamsCMS\Delivery\Exception\BadResponseException;
@@ -11,84 +12,64 @@ use SeamsCMS\Delivery\Exception\BaseException;
 use SeamsCMS\Delivery\Exception\RateLimitException;
 use SeamsCMS\Delivery\Exception\UnauthorizedException;
 use SeamsCMS\Delivery\Model\AssetCollection;
+use SeamsCMS\Delivery\Model\Content;
+use SeamsCMS\Delivery\Model\ContentCollection;
 use SeamsCMS\Delivery\Model\ContentType;
 use SeamsCMS\Delivery\Model\ContentTypeCollection;
 use SeamsCMS\Delivery\Model\WorkspaceCollection;
-use Symfony\Component\OptionsResolver\OptionsResolver;
 
 class Client
 {
     /** @var string */
     protected $workspace;
 
-    /** @var \GuzzleHttp\Client */
+    /** @var ClientInterface */
     protected $client;
 
     /**
      * Client constructor.
      *
-     * @param string $apiKey
+     * @param ClientInterface $client
      * @param string $workspace
-     * @param array $options
      */
-    public function __construct(string $apiKey, string $workspace, $options = array())
+    public function __construct(ClientInterface $client, string $workspace)
     {
-        $resolver = new OptionsResolver();
-        $this->configureOptions($resolver);
-        $resolvedOptions = $resolver->resolve($options);
-
-        // Merge guzzle options and override with our own
-        $options = $resolvedOptions['guzzle_options'];
-        $options = array_merge($options, [
-            'base_uri' => $resolvedOptions['host'],
-            'debug' => $resolvedOptions['debug'],
-            'headers' => [
-                'Authorization' => "Bearer " . $apiKey,
-            ],
-        ]);
-
-        $this->client = new \GuzzleHttp\Client($options);
+        $this->client = $client;
         $this->workspace = $workspace;
     }
 
-    public function configureOptions(OptionsResolver $resolver)
-    {
-        $resolver->setDefaults([
-            'host' => 'https://delivery.seams-api.com/',
-            'debug' => false,
-            'guzzle_options' => [],
-        ]);
-    }
-
     /**
-     *
+     * @return WorkspaceCollection
      */
     public function getWorkspaceCollection(): WorkspaceCollection
     {
         $json = $this->makeApiRequest('get', sprintf('/workspace/%s', $this->workspace));
 
-        return new WorkspaceCollection($json);
+        $data = json_decode($json, true);
+        return WorkspaceCollection::fromArray($data);
     }
 
 
     /**
-     *
+     * @return AssetCollection
      */
     public function getAssetCollection(): AssetCollection
     {
         $json = $this->makeApiRequest('get', sprintf('/workspace/%s/assets', $this->workspace));
 
-        return new AssetCollection($json);
+        $data = json_decode($json, true);
+        return AssetCollection::fromArray($data);
     }
 
     /**
-     *
+     * @return ContentTypeCollection
      */
     public function getContentTypeCollection(): ContentTypeCollection
     {
         $json = $this->makeApiRequest('get', sprintf('/workspace/%s/types', $this->workspace));
 
-        return new ContentTypeCollection($json);
+        $data = json_decode($json, true);
+        return ContentTypeCollection::fromArray($data);
     }
 
     /**
@@ -99,7 +80,34 @@ class Client
     {
         $json = $this->makeApiRequest('get', sprintf('/workspace/%s/type/%s', $this->workspace, $type));
 
-        return new ContentType($json);
+        $data = json_decode($json, true);
+        return ContentType::fromArray($data);
+    }
+
+    /**
+     * @param string $type
+     *
+     * @return ContentCollection
+     */
+    public function getContentCollection(string $type): ContentCollection
+    {
+        $json = $this->makeApiRequest('get', sprintf('/workspace/%s/type/%s/entries', $this->workspace, $type));
+
+        $data = json_decode($json, true);
+        return ContentCollection::fromArray($data);
+    }
+
+    /**
+     * @param string $type
+     *
+     * @return Content
+     */
+    public function getEntry(string $entryId): Content
+    {
+        $json = $this->makeApiRequest('get', sprintf('/workspace/%s/entry/%s', $this->workspace, $entryId));
+
+        $data = json_decode($json, true);
+        return Content::fromArray($data);
     }
 
     /**
